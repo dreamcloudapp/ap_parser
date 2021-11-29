@@ -18,7 +18,7 @@ public class NewsYear {
         ArrayList<NewsMonth> months = new ArrayList<>();
         FilenameFilter filter = (dir, name) -> name.matches("[0-9]{2}");
         for (File monthFile: Objects.requireNonNull(directory.listFiles(filter))) {
-            months.add(new NewsMonth(monthFile, Integer.parseInt(monthFile.getName())));
+            months.add(new NewsMonth(monthFile, this.year, Integer.parseInt(monthFile.getName())));
         }
         return months;
     }

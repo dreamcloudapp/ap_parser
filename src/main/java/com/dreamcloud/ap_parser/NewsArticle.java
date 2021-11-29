@@ -10,6 +10,8 @@ import java.nio.file.Paths;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Date;
 
@@ -23,7 +25,7 @@ public class NewsArticle {
     public String type;
     public int version;
     public String status;
-    public Instant date;
+    public LocalDate date;
     public String role;
     public String language;
     public String headline;
@@ -65,7 +67,8 @@ public class NewsArticle {
 
         //Date
         String dateString = newsData.getString("firstcreated");
-        article.date = Instant.parse(dateString);
+        Instant date = Instant.parse(dateString);
+        article.date = LocalDate.ofInstant(date, ZoneId.systemDefault());
 
         //Role
         article.role = newsData.getString("editorialrole");
@@ -80,10 +83,16 @@ public class NewsArticle {
         article.headline = newsData.getString("headline");
 
         //Extended Headline
-        article.extendedHeadline = newsData.getString("headline_extended");
+        if (newsData.has("headline_extended")) {
+            article.extendedHeadline = newsData.getString("headline_extended");
+        } else {
+            article.extendedHeadline = article.headline;
+        }
 
         //Summary
-        article.summary = newsData.getString("description_summary");
+        if (newsData.has("description_summary")) {
+            article.summary = newsData.getString("description_summary");
+        }
 
         //News Article
         String rawArticle = newsData.getString("body_nitf");

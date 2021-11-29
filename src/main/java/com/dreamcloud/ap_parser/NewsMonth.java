@@ -7,10 +7,12 @@ import java.util.Objects;
 
 public class NewsMonth {
     File directory;
+    public int year;
     public int month;
 
-    public NewsMonth(File directory, int month) {
+    public NewsMonth(File directory, int year, int month) {
         this.directory = directory;
+        this.year = year;
         this.month = month;
     }
 
@@ -18,7 +20,7 @@ public class NewsMonth {
         ArrayList<NewsDay> days = new ArrayList<>();
         FilenameFilter filter = (dir, name) -> name.matches("[0-9]{2}");
         for (File dayFile: Objects.requireNonNull(directory.listFiles(filter))) {
-            days.add(new NewsDay(dayFile, Integer.parseInt(dayFile.getName())));
+            days.add(new NewsDay(dayFile, this.year, this.month, Integer.parseInt(dayFile.getName())));
         }
         return days;
     }
