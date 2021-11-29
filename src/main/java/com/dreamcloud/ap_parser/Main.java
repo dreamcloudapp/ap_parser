@@ -1,17 +1,21 @@
 package com.dreamcloud.ap_parser;
 
 import org.apache.commons.cli.*;
+import org.apache.commons.compress.compressors.bzip2.BZip2CompressorOutputStream;
 import org.json.JSONWriter;
 
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
+import javax.sql.rowset.spi.XmlWriter;
+import javax.xml.stream.XMLOutputFactory;
+import javax.xml.stream.XMLStreamException;
+import javax.xml.stream.XMLStreamWriter;
+import java.io.*;
 import java.text.DecimalFormat;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -39,6 +43,11 @@ public class Main {
         endDateOption.setRequired(false);
         options.addOption(endDateOption);
 
+        Option categoryOption = new Option("category", "category", true, "category [category2, ...] -- A list of categories to include.");
+        categoryOption.setRequired(false);
+        categoryOption.setArgs(Option.UNLIMITED_VALUES);
+        options.addOption(categoryOption);
+
         CommandLineParser commandLineParser = new DefaultParser();
         HelpFormatter formatter = new HelpFormatter();
         try {
@@ -47,6 +56,7 @@ public class Main {
             String start = cmd.getOptionValue("start");
             String end = cmd.getOptionValue("end");
             String[] writeArgs = cmd.getOptionValues("write");
+            String[] categoryArgs = cmd.getOptionValues("category");
 
             LocalDate startDate = null;
             if (nonEmpty(start)) {
@@ -58,13 +68,12 @@ public class Main {
                 endDate = LocalDate.parse(end);
             }
 
-
             if (nonEmpty(infoDirectory)) {
                 displayInfo(infoDirectory, startDate, endDate);
             } else if (writeArgs != null && writeArgs.length == 2) {
                 File newsDirectory = new File(writeArgs[0]);
                 File outputFile = new File(writeArgs[1]);
-                writeParsedJson(newsDirectory, outputFile, startDate, endDate);
+                writeParsedJson(newsDirectory, outputFile, startDate, endDate, categoryArgs);
             } else {
                 formatter.printHelp("ap_parser", options);
             }
@@ -126,15 +135,18 @@ public class Main {
         System.out.println("----------");
     }
 
-    static void writeParsedJson(File newsDirectory, File outputFile, LocalDate startDate, LocalDate endDate) throws IOException {
+    static void writeParsedJson(File newsDirectory, File outputFile, LocalDate startDate, LocalDate endDate, String[] categories) throws IOException, XMLStreamException {
         int articleCount = 0;
         int writeCount = 0;
         Instant startTime = Instant.now();
         System.out.println("Parsing news sources from " + newsDirectory.getPath() + "...");
         Parser parser = new Parser(newsDirectory);
-        FileWriter fileWriter = new FileWriter(outputFile);
-        JSONWriter jsonWriter = new JSONWriter(fileWriter);
-        jsonWriter.array();
+        OutputStream outputStream = new FileOutputStream(outputFile);
+        outputStream = new BufferedOutputStream(outputStream);
+        outputStream = new BZip2CompressorOutputStream(outputStream);
+        XMLStreamWriter xmlWriter = XMLOutputFactory.newFactory().createXMLStreamWriter(outputStream);
+        xmlWriter.writeStartDocument();
+        xmlWriter.writeStartElement("articles");
         ArrayList<NewsYear> years = parser.getYears();
         for (NewsYear year: years) {
             ArrayList<NewsMonth> months = year.getMonths();
@@ -150,21 +162,40 @@ public class Main {
                         if (endDate != null && endDate.isBefore(article.date)) {
                             continue;
                         }
+
+                        if (categories != null && categories.length > 0) {
+                            boolean found = true;
+                            for (String category: categories) {
+                                if (!article.categories.contains(category)) {
+                                    found = false;
+                                    break;
+                                }
+                            }
+                            if (!found) {
+                                continue;
+                            }
+                        }
+
                         writeCount++;
-                        jsonWriter.object();
-                        jsonWriter.key("id");
-                        jsonWriter.value(article.id);
+                        xmlWriter.writeStartElement("article");
 
-                        jsonWriter.key("type");
-                        jsonWriter.value(article.type);
+                        xmlWriter.writeStartElement("id");
+                        xmlWriter.writeCharacters(article.id);
+                        xmlWriter.writeEndElement();
 
-                        jsonWriter.key("version");
-                        jsonWriter.value(article.version);
+                        xmlWriter.writeStartElement("type");
+                        xmlWriter.writeCharacters(article.type);
+                        xmlWriter.writeEndElement();
 
-                        jsonWriter.key("status");
-                        jsonWriter.value(article.status);
+                        xmlWriter.writeStartElement("version");
+                        xmlWriter.writeCharacters(String.valueOf(article.version));
+                        xmlWriter.writeEndElement();
 
-                        jsonWriter.key("date");
+                        xmlWriter.writeStartElement("status");
+                        xmlWriter.writeCharacters(article.status);
+                        xmlWriter.writeEndElement();
+
+                        xmlWriter.writeStartElement("date");
                         String monthString = String.valueOf(article.date.getMonthValue());
                         if (monthString.length() == 1) {
                             monthString = "0" + monthString;
@@ -173,42 +204,54 @@ public class Main {
                         if (dayString.length() == 1) {
                             dayString = "0" + dayString;
                         }
-                        jsonWriter.value(article.date.getYear() + "-" + monthString + "-" + dayString);
+                        xmlWriter.writeCharacters(article.date.getYear() + "-" + monthString + "-" + dayString);
+                        xmlWriter.writeEndElement();
 
-                        jsonWriter.key("role");
-                        jsonWriter.value(article.role);
+                        xmlWriter.writeStartElement("role");
+                        xmlWriter.writeCharacters(article.role);
+                        xmlWriter.writeEndElement();
 
-                        jsonWriter.key("language");
-                        jsonWriter.value(article.language);
+                        xmlWriter.writeStartElement("language");
+                        xmlWriter.writeCharacters(article.language);
+                        xmlWriter.writeEndElement();
 
-                        jsonWriter.key("title");
-                        jsonWriter.value(article.title);
+                        xmlWriter.writeStartElement("title");
+                        xmlWriter.writeCharacters(article.title);
+                        xmlWriter.writeEndElement();
 
-                        jsonWriter.key("headline");
-                        jsonWriter.value(article.headline);
+                        xmlWriter.writeStartElement("headline");
+                        xmlWriter.writeCharacters(article.headline);
+                        xmlWriter.writeEndElement();
 
-                        jsonWriter.key("extendedHeadline");
-                        jsonWriter.value(article.extendedHeadline);
+                        xmlWriter.writeStartElement("extendedHeadline");
+                        xmlWriter.writeCharacters(article.extendedHeadline);
+                        xmlWriter.writeEndElement();
 
-                        jsonWriter.key("summary");
-                        jsonWriter.value(article.summary);
+                        xmlWriter.writeStartElement("summary");
+                        xmlWriter.writeCharacters(article.summary);
+                        xmlWriter.writeEndElement();
 
-                        jsonWriter.key("article");
-                        jsonWriter.value(article.article);
+                        xmlWriter.writeStartElement("article");
+                        xmlWriter.writeCharacters(article.article);
+                        xmlWriter.writeEndElement();
 
-                        jsonWriter.key("categories");
-                        jsonWriter.array();
+                        xmlWriter.writeStartElement("categories");
                         for (String category: article.categories) {
-                            jsonWriter.value(category);
+                            xmlWriter.writeStartElement("category");
+                            xmlWriter.writeCharacters(category);
+                            xmlWriter.writeEndElement();
                         }
-                        jsonWriter.endArray();
-                        jsonWriter.endObject();
+                        xmlWriter.writeEndElement();
+
+                        xmlWriter.writeEndElement();
                     }
                 }
             }
         }
-        jsonWriter.endArray();
-        fileWriter.close();
+        xmlWriter.writeEndElement();
+        xmlWriter.writeEndDocument();
+        xmlWriter.close();
+        outputStream.close();
         long secondsPassed = Instant.now().getEpochSecond() - startTime.getEpochSecond();
         System.out.println("Write Statistics:");
         System.out.println("----------");
