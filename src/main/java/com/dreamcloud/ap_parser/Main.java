@@ -3,6 +3,8 @@ package com.dreamcloud.ap_parser;
 import org.apache.commons.cli.*;
 
 import java.io.File;
+import java.io.IOException;
+import java.time.Instant;
 import java.util.ArrayList;
 
 public class Main {
@@ -23,6 +25,8 @@ public class Main {
             String infoDirectory = cmd.getOptionValue("info");
 
             if (nonEmpty(infoDirectory)) {
+                int articleCount = 0;
+                Instant startTime = Instant.now();
                 System.out.println("Gathering info for '" + infoDirectory + "'...\n");
                 Parser parser = new Parser(new File(infoDirectory));
                 ArrayList<NewsYear> years = parser.getYears();
@@ -44,15 +48,27 @@ public class Main {
                         System.out.println("----------");
                         ArrayList<NewsDay> days = month.getDays();
                         System.out.println("Days: " + days.size());
+                        for (NewsDay day: days) {
+                            ArrayList<NewsArticle> articles = day.getArticles();
+                            System.out.println("Day " + day.day + " articles: " + articles.size());
+                            articleCount += articles.size();
+                        }
                         System.out.println("----------\n");
                     }
                     System.out.println("----------\n");
                 }
+                long secondsPassed = Instant.now().getEpochSecond() - startTime.getEpochSecond();
+                System.out.println("Processed " + articleCount + " in " + secondsPassed + " seconds.");
             } else {
                 formatter.printHelp("ap_parser", options);
             }
-
         } catch (ParseException e) {
+            e.printStackTrace();
+            System.exit(1);
+        } catch (IOException e) {
+            e.printStackTrace();
+            System.exit(1);
+        } catch (java.text.ParseException e) {
             e.printStackTrace();
             System.exit(1);
         }
