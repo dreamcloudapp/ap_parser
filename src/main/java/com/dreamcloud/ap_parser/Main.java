@@ -14,10 +14,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneOffset;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 public class Main {
     public static boolean nonEmpty(String s) {
@@ -26,27 +23,37 @@ public class Main {
 
     public static void main(String[] args) {
         Options options = new Options();
-        Option infoOption = new Option("info", "info", true, "news source dir -- Displays information about the news articles.");
+        Option infoOption = new Option(null, "info", true, "news source dir -- Displays information about the news articles.");
         infoOption.setRequired(false);
         options.addOption(infoOption);
 
-        Option writeOption = new Option("write", "write", true, "news source dir, output file -- Takes all of the news articles, formats them, and writes to a single JSON file.");
+        Option writeOption = new Option(null, "write", true, "news source dir, output file -- Takes all of the news articles, formats them, and writes to a single JSON file.");
         writeOption.setRequired(false);
         writeOption.setArgs(2);
         options.addOption(writeOption);
 
-        Option startDateOption = new Option("start", "start", true, "start date (YYYY-MM-DD) -- Start date for articles to include.");
+        Option randomArticlesOption = new Option(null, "random-summary", true, "news source dir, count -- Prints a list of $count random news summaries.");
+        randomArticlesOption.setRequired(false);
+        randomArticlesOption.setArgs(2);
+        options.addOption(randomArticlesOption);
+
+        Option startDateOption = new Option(null, "start", true, "start date (YYYY-MM-DD) -- Start date for articles to include.");
         startDateOption.setRequired(false);
         options.addOption(startDateOption);
 
-        Option endDateOption = new Option("end", "end", true, "end date (YYYY-MM-DD) -- End date for articles to include.");
+        Option endDateOption = new Option(null, "end", true, "end date (YYYY-MM-DD) -- End date for articles to include.");
         endDateOption.setRequired(false);
         options.addOption(endDateOption);
 
-        Option categoryOption = new Option("category", "category", true, "category [category2, ...] -- A list of categories to include.");
+        Option categoryOption = new Option(null, "category", true, "category [category2, ...] -- A list of categories to include.");
         categoryOption.setRequired(false);
         categoryOption.setArgs(Option.UNLIMITED_VALUES);
         options.addOption(categoryOption);
+
+        Option textMatchOption = new Option(null, "text", true, "text1 [text2, ...] -- A list of words or phrases which must be in the article texts.");
+        textMatchOption.setRequired(false);
+        textMatchOption.setArgs(Option.UNLIMITED_VALUES);
+        options.addOption(textMatchOption);
 
         CommandLineParser commandLineParser = new DefaultParser();
         HelpFormatter formatter = new HelpFormatter();
@@ -56,7 +63,9 @@ public class Main {
             String start = cmd.getOptionValue("start");
             String end = cmd.getOptionValue("end");
             String[] writeArgs = cmd.getOptionValues("write");
+            String[] randomSummaryArgs = cmd.getOptionValues("random-summary");
             String[] categoryArgs = cmd.getOptionValues("category");
+            String[] textMatches =  cmd.getOptionValues("text");
 
             LocalDate startDate = null;
             if (nonEmpty(start)) {
@@ -69,11 +78,15 @@ public class Main {
             }
 
             if (nonEmpty(infoDirectory)) {
-                displayInfo(infoDirectory, startDate, endDate);
+                displayInfo(infoDirectory, startDate, endDate, categoryArgs, textMatches);
             } else if (writeArgs != null && writeArgs.length == 2) {
                 File newsDirectory = new File(writeArgs[0]);
                 File outputFile = new File(writeArgs[1]);
-                writeParsedJson(newsDirectory, outputFile, startDate, endDate, categoryArgs);
+                writeParsedJson(newsDirectory, outputFile, startDate, endDate, categoryArgs, textMatches);
+            } else if (randomSummaryArgs != null && randomSummaryArgs.length == 2) {
+                File newsDirectory = new File(randomSummaryArgs[0]);
+                int count = Integer.parseInt(randomSummaryArgs[1]);
+                printRandomSummaries(newsDirectory, count, startDate, endDate, categoryArgs, textMatches);
             } else {
                 formatter.printHelp("ap_parser", options);
             }
@@ -83,9 +96,75 @@ public class Main {
         }
     }
 
-    static void displayInfo(String newsDirectory, LocalDate startDate, LocalDate endDate) {
+    private static void printRandomSummaries(File newsDirectory, int count, LocalDate startDate, LocalDate endDate, String[] categories, String[] textMatches) {
+        Set<String> uniqueArticleIds = new HashSet<>();
+        int articleCount = 0;
+        int matchedCount = 0;
+        Instant startTime = Instant.now();
+        System.out.println("Gathering info for '" + newsDirectory + "'...\n");
+        Parser parser = new Parser(newsDirectory);
+        ArrayList<NewsYear> years = parser.getYears();
+        for (NewsYear year: years) {
+            ArrayList<NewsMonth> months = year.getMonths();
+            for (NewsMonth month: months) {
+                ArrayList<NewsDay> days = month.getDays();
+                for (NewsDay day: days) {
+                    ArrayList<NewsArticle> articles = day.getArticles();
+                    for (NewsArticle article: articles) {
+                        articleCount++;
+                        if (!article.matches(startDate, endDate, categories, textMatches)) {
+                            continue;
+                        }
+                        uniqueArticleIds.add(article.id);
+                        matchedCount++;
+                    }
+                }
+            }
+        }
+
+        Set<String> randomIds;
+        Random random = new Random();
+        if (uniqueArticleIds.size() <= count) {
+            randomIds = uniqueArticleIds;
+        } else {
+            randomIds = new HashSet<>();
+            String[] uniqueIds = uniqueArticleIds.toArray(String[]::new);
+            for (int i=0; i<count; i++) {
+                randomIds.add(uniqueIds[random.nextInt(uniqueIds.length)]);
+            }
+        }
+
+        ArrayList<NewsArticle> randomArticles = new ArrayList<>();
+        for (NewsYear year: years) {
+            ArrayList<NewsMonth> months = year.getMonths();
+            for (NewsMonth month: months) {
+                ArrayList<NewsDay> days = month.getDays();
+                for (NewsDay day: days) {
+                    ArrayList<NewsArticle> articles = day.getArticles();
+                    for (NewsArticle article: articles) {
+                        if (randomIds.contains(article.id)) {
+                            randomArticles.add(article);
+                        }
+                    }
+                }
+            }
+        }
+
+        System.out.println("Random articles: ");
+        System.out.println("----------\n");
+        for (NewsArticle article: randomArticles) {
+            System.out.println(article.summary.replace("\n", " "));
+        }
+        System.out.println("----------\n");
+
+        long secondsPassed = Instant.now().getEpochSecond() - startTime.getEpochSecond();
+        System.out.println("Processed " + articleCount + " articles in " + secondsPassed + " seconds.\n");
+    }
+
+    static void displayInfo(String newsDirectory, LocalDate startDate, LocalDate endDate, String[] categories, String[] textMatches) {
         Map<String, Integer> categoryMap = new HashMap<>();
         int articleCount = 0;
+        int matchedCount = 0;
         Instant startTime = Instant.now();
         System.out.println("Gathering info for '" + newsDirectory + "'...\n");
         Parser parser = new Parser(new File(newsDirectory));
@@ -110,15 +189,21 @@ public class Main {
                 System.out.println("Days: " + days.size());
                 for (NewsDay day: days) {
                     ArrayList<NewsArticle> articles = day.getArticles();
+                    int dayArticleCount = 0;
                     for (NewsArticle article: articles) {
+                        articleCount++;
+                        if (!article.matches(startDate, endDate, categories, textMatches)) {
+                            continue;
+                        }
+                        matchedCount++;
+                        dayArticleCount++;
                         //Build some category maps
                         for (String category: article.categories) {
                             int count = categoryMap.getOrDefault(category, 0);
                             categoryMap.put(category, ++count);
                         }
                     }
-                    System.out.println("Day " + day.day + " articles: " + articles.size());
-                    articleCount += articles.size();
+                    System.out.println("Day " + day.day + " articles: " + dayArticleCount);
                 }
                 System.out.println("----------\n");
             }
@@ -127,6 +212,7 @@ public class Main {
         long secondsPassed = Instant.now().getEpochSecond() - startTime.getEpochSecond();
         System.out.println("Processed " + articleCount + " articles in " + secondsPassed + " seconds.\n");
         System.out.println("----------");
+        System.out.println("Matched articles: " + matchedCount);
         System.out.println("Category information:");
         System.out.println("----------");
         for (Map.Entry<String, Integer> entry: categoryMap.entrySet()) {
@@ -135,7 +221,7 @@ public class Main {
         System.out.println("----------");
     }
 
-    static void writeParsedJson(File newsDirectory, File outputFile, LocalDate startDate, LocalDate endDate, String[] categories) throws IOException, XMLStreamException {
+    static void writeParsedJson(File newsDirectory, File outputFile, LocalDate startDate, LocalDate endDate, String[] categories, String[] textMatches) throws IOException, XMLStreamException {
         int articleCount = 0;
         int writeCount = 0;
         Instant startTime = Instant.now();
@@ -156,26 +242,9 @@ public class Main {
                     ArrayList<NewsArticle> articles = day.getArticles();
                     for (NewsArticle article: articles) {
                         articleCount++;
-                        if (startDate != null && startDate.isAfter(article.date)) {
+                        if (!article.matches(startDate, endDate, categories, textMatches)) {
                             continue;
                         }
-                        if (endDate != null && endDate.isBefore(article.date)) {
-                            continue;
-                        }
-
-                        if (categories != null && categories.length > 0) {
-                            boolean found = true;
-                            for (String category: categories) {
-                                if (!article.categories.contains(category)) {
-                                    found = false;
-                                    break;
-                                }
-                            }
-                            if (!found) {
-                                continue;
-                            }
-                        }
-
                         writeCount++;
                         xmlWriter.writeStartElement("article");
 

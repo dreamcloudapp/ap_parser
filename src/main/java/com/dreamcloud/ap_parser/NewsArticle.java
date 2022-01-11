@@ -14,6 +14,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.Locale;
 
 import org.json.*;
 import org.jsoup.Jsoup;
@@ -116,5 +117,38 @@ public class NewsArticle {
         }
 
         return article;
+    }
+
+    public boolean matches(LocalDate startDate, LocalDate endDate, String[] categories, String[] textMatches) {
+        if (startDate != null && startDate.isAfter(this.date)) {
+            return false;
+        }
+        if (endDate != null && endDate.isBefore(this.date)) {
+            return false;
+        }
+
+        if (categories != null && categories.length > 0) {
+            boolean found = true;
+            for (String category: categories) {
+                if (!this.categories.contains(category)) {
+                    found = false;
+                    break;
+                }
+            }
+            if (!found) {
+                return false;
+            }
+        }
+
+        if (textMatches != null && textMatches.length > 0) {
+            String articleText = this.article.toLowerCase(Locale.ENGLISH);
+            for (String textMatch: textMatches) {
+                if (!articleText.contains(textMatch.toLowerCase(Locale.ENGLISH))) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        return true;
     }
 }
