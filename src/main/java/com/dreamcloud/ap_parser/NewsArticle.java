@@ -122,16 +122,12 @@ public class NewsArticle {
         }
 
         if (categories != null && categories.length > 0) {
-            boolean found = true;
             for (String category: categories) {
-                if (!this.categories.contains(category)) {
-                    found = false;
-                    break;
+                if (this.categories.contains(category)) {
+                    return true;
                 }
             }
-            if (!found) {
-                return false;
-            }
+            return false;
         }
 
         if (textMatches != null && textMatches.length > 0) {

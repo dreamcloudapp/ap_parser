@@ -7,6 +7,7 @@ import javax.xml.stream.XMLOutputFactory;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamWriter;
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.text.DecimalFormat;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -177,15 +178,11 @@ public class Main {
 
         System.out.println("Here's a quick break-down of each year:");
         for (NewsYear year: years) {
-            System.out.println("Year " + year.year + ":");
-            System.out.println("----------");
+            int yearArticles = 0;
             ArrayList<NewsMonth> months = year.getMonths();
-            System.out.println("Months: " + months.size());
             for (NewsMonth month: months) {
-                System.out.println("Month " + month.month + ":");
-                System.out.println("----------");
+                int monthArticles = 0;
                 ArrayList<NewsDay> days = month.getDays();
-                System.out.println("Days: " + days.size());
                 for (NewsDay day: days) {
                     ArrayList<NewsArticle> articles = day.getArticles();
                     int dayArticleCount = 0;
@@ -195,17 +192,18 @@ public class Main {
                             continue;
                         }
                         matchedCount++;
-                        dayArticleCount++;
+                        monthArticles++;
+                        yearArticles++;
                         //Build some category maps
                         for (String category: article.categories) {
                             int count = categoryMap.getOrDefault(category, 0);
                             categoryMap.put(category, ++count);
                         }
                     }
-                    System.out.println("Day " + day.day + " articles: " + dayArticleCount);
                 }
-                System.out.println("----------\n");
+                System.out.println(month.year + "-" + month.month + ": " + monthArticles);
             }
+            System.out.println(year.year + ": " + yearArticles);
             System.out.println("----------\n");
         }
         long secondsPassed = Instant.now().getEpochSecond() - startTime.getEpochSecond();
@@ -221,6 +219,8 @@ public class Main {
     }
 
     static void writeParsedJson(File newsDirectory, File outputFile, LocalDate startDate, LocalDate endDate, String[] categories, String[] textMatches) throws IOException, XMLStreamException {
+        boolean writeXml = outputFile.getName().contains(".xml");
+
         int articleCount = 0;
         int writeCount = 0;
         Instant startTime = Instant.now();
@@ -228,10 +228,21 @@ public class Main {
         Parser parser = new Parser(newsDirectory);
         OutputStream outputStream = new FileOutputStream(outputFile);
         outputStream = new BufferedOutputStream(outputStream);
-        outputStream = new BZip2CompressorOutputStream(outputStream);
+
+        if (writeXml) {
+            outputStream = new BZip2CompressorOutputStream(outputStream);
+        }
+
         XMLStreamWriter xmlWriter = XMLOutputFactory.newFactory().createXMLStreamWriter(outputStream);
-        xmlWriter.writeStartDocument();
-        xmlWriter.writeStartElement("articles");
+
+        if (writeXml) {
+            xmlWriter.writeStartDocument();
+            xmlWriter.writeStartElement("articles");
+        } else {
+            //write CSV headers
+            outputStream.write("NewsId,Date,Title,Categories,Headline,Extended Headline,Summary,Text\n".getBytes(StandardCharsets.UTF_8));
+        }
+
         ArrayList<NewsYear> years = parser.getYears();
         for (NewsYear year: years) {
             ArrayList<NewsMonth> months = year.getMonths();
@@ -245,80 +256,113 @@ public class Main {
                             continue;
                         }
                         writeCount++;
-                        xmlWriter.writeStartElement("article");
 
-                        xmlWriter.writeStartElement("id");
-                        xmlWriter.writeCharacters(article.id);
-                        xmlWriter.writeEndElement();
+                        if (writeXml) {
+                            xmlWriter.writeStartElement("article");
 
-                        xmlWriter.writeStartElement("type");
-                        xmlWriter.writeCharacters(article.type);
-                        xmlWriter.writeEndElement();
-
-                        xmlWriter.writeStartElement("version");
-                        xmlWriter.writeCharacters(String.valueOf(article.version));
-                        xmlWriter.writeEndElement();
-
-                        xmlWriter.writeStartElement("status");
-                        xmlWriter.writeCharacters(article.status);
-                        xmlWriter.writeEndElement();
-
-                        xmlWriter.writeStartElement("date");
-                        String monthString = String.valueOf(article.date.getMonthValue());
-                        if (monthString.length() == 1) {
-                            monthString = "0" + monthString;
-                        }
-                        String dayString = String.valueOf(article.date.getMonthValue());
-                        if (dayString.length() == 1) {
-                            dayString = "0" + dayString;
-                        }
-                        xmlWriter.writeCharacters(article.date.getYear() + "-" + monthString + "-" + dayString);
-                        xmlWriter.writeEndElement();
-
-                        xmlWriter.writeStartElement("role");
-                        xmlWriter.writeCharacters(article.role);
-                        xmlWriter.writeEndElement();
-
-                        xmlWriter.writeStartElement("language");
-                        xmlWriter.writeCharacters(article.language);
-                        xmlWriter.writeEndElement();
-
-                        xmlWriter.writeStartElement("title");
-                        xmlWriter.writeCharacters(article.title);
-                        xmlWriter.writeEndElement();
-
-                        xmlWriter.writeStartElement("headline");
-                        xmlWriter.writeCharacters(article.headline);
-                        xmlWriter.writeEndElement();
-
-                        xmlWriter.writeStartElement("extendedHeadline");
-                        xmlWriter.writeCharacters(article.extendedHeadline);
-                        xmlWriter.writeEndElement();
-
-                        xmlWriter.writeStartElement("summary");
-                        xmlWriter.writeCharacters(article.summary);
-                        xmlWriter.writeEndElement();
-
-                        xmlWriter.writeStartElement("article");
-                        xmlWriter.writeCharacters(article.article);
-                        xmlWriter.writeEndElement();
-
-                        xmlWriter.writeStartElement("categories");
-                        for (String category: article.categories) {
-                            xmlWriter.writeStartElement("category");
-                            xmlWriter.writeCharacters(category);
+                            xmlWriter.writeStartElement("id");
+                            xmlWriter.writeCharacters(article.id);
                             xmlWriter.writeEndElement();
-                        }
-                        xmlWriter.writeEndElement();
 
-                        xmlWriter.writeEndElement();
+                            xmlWriter.writeStartElement("type");
+                            xmlWriter.writeCharacters(article.type);
+                            xmlWriter.writeEndElement();
+
+                            xmlWriter.writeStartElement("version");
+                            xmlWriter.writeCharacters(String.valueOf(article.version));
+                            xmlWriter.writeEndElement();
+
+                            xmlWriter.writeStartElement("status");
+                            xmlWriter.writeCharacters(article.status);
+                            xmlWriter.writeEndElement();
+
+                            xmlWriter.writeStartElement("date");
+                            String monthString = String.valueOf(article.date.getMonthValue());
+                            if (monthString.length() == 1) {
+                                monthString = "0" + monthString;
+                            }
+                            String dayString = String.valueOf(article.date.getMonthValue());
+                            if (dayString.length() == 1) {
+                                dayString = "0" + dayString;
+                            }
+                            xmlWriter.writeCharacters(article.date.getYear() + "-" + monthString + "-" + dayString);
+                            xmlWriter.writeEndElement();
+
+                            xmlWriter.writeStartElement("role");
+                            xmlWriter.writeCharacters(article.role);
+                            xmlWriter.writeEndElement();
+
+                            xmlWriter.writeStartElement("language");
+                            xmlWriter.writeCharacters(article.language);
+                            xmlWriter.writeEndElement();
+
+                            xmlWriter.writeStartElement("title");
+                            xmlWriter.writeCharacters(article.title);
+                            xmlWriter.writeEndElement();
+
+                            xmlWriter.writeStartElement("headline");
+                            xmlWriter.writeCharacters(article.headline);
+                            xmlWriter.writeEndElement();
+
+                            xmlWriter.writeStartElement("extendedHeadline");
+                            xmlWriter.writeCharacters(article.extendedHeadline);
+                            xmlWriter.writeEndElement();
+
+                            xmlWriter.writeStartElement("summary");
+                            xmlWriter.writeCharacters(article.summary);
+                            xmlWriter.writeEndElement();
+
+                            xmlWriter.writeStartElement("article");
+                            xmlWriter.writeCharacters(article.article);
+                            xmlWriter.writeEndElement();
+
+                            xmlWriter.writeStartElement("categories");
+                            for (String category: article.categories) {
+                                xmlWriter.writeStartElement("category");
+                                xmlWriter.writeCharacters(category);
+                                xmlWriter.writeEndElement();
+                            }
+                            xmlWriter.writeEndElement();
+
+                            xmlWriter.writeEndElement();
+                        } else {
+                            //Write CSV
+                            //NewsId,Date,Title,Categories,Headline,Extended Headline,Summary,Text
+                            String safeId = article.id;
+                            String safeDate = article.date.toString();
+                            String safeTitle = article.title.replace('\n', ' ').replace('"', '\'');
+                            String safeCategories = String.join(", ", article.categories);
+                            String safeHeadline = article.headline.replace('\n', ' ').replace('"', '\'');
+                            String safeExtendedHeadline = article.extendedHeadline.replace('\n', ' ').replace('"', '\'');
+                            String safeSummary = article.summary.replace('\n', ' ').replace('"', '\'');
+
+                            if (safeSummary.trim().equals("")) {
+                                continue;
+                            }
+
+                            String safeText = article.article.replace('\n', ' ').replace('"', '\'');
+
+                            String[] csvLine = new String[]{safeId, safeDate, safeTitle, safeCategories, safeHeadline, safeExtendedHeadline, safeSummary, safeText};
+
+                            for (int fieldIdx = 0; fieldIdx < csvLine.length; fieldIdx++) {
+                                String field = csvLine[fieldIdx];
+                                if (field.contains(",")) {
+                                    field = "\"" + field + "\"";
+                                }
+                                csvLine[fieldIdx] = field;
+                            }
+                            outputStream.write(String.join(",", csvLine).getBytes(StandardCharsets.UTF_8));
+                            outputStream.write('\n');
+                        }
                     }
                 }
             }
         }
-        xmlWriter.writeEndElement();
-        xmlWriter.writeEndDocument();
-        xmlWriter.close();
+        if (writeXml) {
+            xmlWriter.writeEndElement();
+            xmlWriter.writeEndDocument();
+            xmlWriter.close();
+        }
         outputStream.close();
         long secondsPassed = Instant.now().getEpochSecond() - startTime.getEpochSecond();
         System.out.println("Write Statistics:");
