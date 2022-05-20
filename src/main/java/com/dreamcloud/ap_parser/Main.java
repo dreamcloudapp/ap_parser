@@ -346,7 +346,7 @@ public class Main {
 
                             for (int fieldIdx = 0; fieldIdx < csvLine.length; fieldIdx++) {
                                 String field = csvLine[fieldIdx];
-                                if (field.contains(",")) {
+                                if (field.contains(",") || field.contains(" ")) {
                                     field = "\"" + field + "\"";
                                 }
                                 csvLine[fieldIdx] = field;
